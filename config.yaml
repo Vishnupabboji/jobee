@@ -1,0 +1,37 @@
+roles:
+- Product Manager
+- Associate Product Manager
+- Product Owner
+- AI Engineer
+locations: []
+max_years_experience: 5
+exclude_title_keywords:
+- Senior
+- Staff
+- Principal
+- Lead
+- Head
+- Director
+- VP
+- Manager of Managers
+enable_jobspy: true
+jobspy_sites:
+- linkedin
+- indeed
+- glassdoor
+- naukri
+enable_reddit: true
+subreddits:
+- forhire
+- hiring
+- IndianStartups
+- startups
+enable_ats: true
+ats_slugs:
+  greenhouse: []
+  lever: []
+schedule_hours: 6
+resume_mode: single_base
+google_sheet_id: ''
+google_drive_folder_id: ''
+fuzzy_threshold: 88

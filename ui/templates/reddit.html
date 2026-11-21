@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="section-title">Reddit Jobs Search (Unauthenticated)</div>
+
+<p class="text-muted" style="margin-bottom: 16px;">
+    Search hiring discussions and job openings across hiring subreddits in real-time. No Reddit API credentials required.
+</p>
+
+<!-- Reddit Search Form -->
+<div class="info-box" style="margin-bottom: 24px; background: #fafafa;">
+    <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+        <div>
+            <label>Search Keywords / Role:</label><br>
+            <input type="text" id="reddit-query" placeholder="e.g. Product Manager, Python, React, AI" style="width: 280px; height: 34px;" />
+        </div>
+        <div>
+            <label>Location (Default: Hyderabad):</label><br>
+            <input type="text" id="reddit-location" value="Hyderabad" placeholder="City or Remote" style="width: 200px; height: 34px;" />
+        </div>
+        <div>
+            <button class="btn" id="btn-reddit-search" onclick="executeRedditSearch()" style="height: 34px;">
+                Search Reddit
+            </button>
+        </div>
+        <span id="reddit-search-status" style="font-size: 13px; font-weight: bold; margin-left: 8px;"></span>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 12px;">
+        <span class="text-muted">Targeting Subreddits:</span>
+        <span class="source-tag">r/forhire</span>
+        <span class="source-tag">r/hiring</span>
+        <span class="source-tag">r/IndianStartups</span>
+        <span class="source-tag">r/startups</span>
+        <span class="source-tag">r/freelance_forhire</span>
+    </div>
+</div>
+
+<!-- Results Area -->
+<div id="reddit-results-container">
+    <div class="empty-state" id="reddit-empty-state">
+        <p><strong>Ready to search Reddit.</strong></p>
+        <p style="margin-top: 8px;">Enter keywords above and click <strong>Search Reddit</strong> to pull real-time hiring posts.</p>
+    </div>
+</div>
+
+<script>
+async function executeRedditSearch() {
+    const query = document.getElementById('reddit-query').value.trim();
+    const location = document.getElementById('reddit-location').value.trim();
+    const btn = document.getElementById('btn-reddit-search');
+    const status = document.getElementById('reddit-search-status');
+    const container = document.getElementById('reddit-results-container');
+
+    btn.disabled = true;
+    status.innerHTML = '<span class="spinner"></span> Searching Reddit live...';
+
+    try {
+        const res = await fetch('/api/reddit/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query, location: location })
+        });
+        const data = await res.json();
+
+        if (data.success && data.posts && data.posts.length > 0) {
+            status.innerText = `Found ${data.posts.length} posts`;
+            renderRedditResults(data.posts, location || 'Hyderabad');
+        } else {
+            status.innerText = 'No matching posts found.';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p><strong>No Reddit hiring posts found for "${query}" in "${location}".</strong></p>
+                    <p style="margin-top: 8px;">Try broader keywords or changing the location.</p>
+                </div>
+            `;
+        }
+    } catch (e) {
+        status.innerText = 'Search failed.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function renderRedditResults(posts, location) {
+    const container = document.getElementById('reddit-results-container');
+    let html = `
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subreddit</th>
+                        <th>Age</th>
+                        <th>Post Title</th>
+                        <th>Contact / User</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    posts.forEach(p => {
+        const encodedPost = encodeURIComponent(JSON.stringify(p));
+        html += `
+            <tr>
+                <td class="nowrap"><span class="source-tag">${p.subreddit}</span></td>
+                <td class="nowrap">${p.age_str}</td>
+                <td>
+                    <div style="font-weight: bold; margin-bottom: 4px;">
+                        <a href="${p.url}" target="_blank">${p.title} &nearr;</a>
+                    </div>
+                    <div class="text-muted" style="font-size: 12px; line-height: 1.4;">
+                        ${p.preview}
+                    </div>
+                </td>
+                <td class="nowrap"><code>${p.contact_info}</code></td>
+                <td class="nowrap">
+                    <button class="btn btn-sm btn-outline" id="import-btn-${p.id}" onclick="importRedditPost('${p.id}', '${encodedPost}', '${location}')">
+                        + Import to Tracker
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+async function importRedditPost(id, encodedData, location) {
+    const btn = document.getElementById(`import-btn-${id}`);
+    btn.disabled = true;
+    btn.innerText = 'Importing...';
+
+    try {
+        const post = JSON.parse(decodeURIComponent(encodedData));
+        const res = await fetch('/api/reddit/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: post, location: location })
+        });
+        const data = await res.json();
+        if (data.success) {
+            btn.innerText = 'Imported ✓';
+            btn.style.background = '#000';
+            btn.style.color = '#fff';
+        } else {
+            btn.innerText = 'Failed';
+            btn.disabled = false;
+        }
+    } catch (e) {
+        btn.innerText = 'Error';
+        btn.disabled = false;
+    }
+}
+
+// Allow Enter key to submit search
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById('reddit-query').addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') executeRedditSearch();
+    });
+    document.getElementById('reddit-location').addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') executeRedditSearch();
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="section-title">Filters & Search Targets</div>
+
+<form method="POST" action="/api/settings/filters">
+    <div class="info-box">
+        <h3>Role & Location Search Criteria</h3>
+        <p class="text-muted" style="margin-bottom: 12px;">Enter one per line or comma-separated.</p>
+        
+        <div class="form-row">
+            <label>Target Roles:</label>
+            <textarea name="roles" rows="4" style="width: 100%;">{{ config.roles | join('\n') }}</textarea>
+        </div>
+
+        <div class="form-row">
+            <label>Target Locations:</label>
+            <textarea name="locations" rows="3" style="width: 100%;">{{ config.locations | join('\n') }}</textarea>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <h3>Strict Gatekeeper Rules</h3>
+        <p class="text-muted" style="margin-bottom: 12px;">Jobs violating these rules are automatically dropped before hitting the database.</p>
+        
+        <div class="form-row">
+            <label>Max Experience Allowed (Years):</label>
+            <input type="number" name="max_years_experience" value="{{ config.max_years_experience }}" min="0" max="25" />
+        </div>
+
+        <div class="form-row">
+            <label>Exclude Title Keywords:</label>
+            <textarea name="exclude_title_keywords" rows="3" style="width: 100%;">{{ config.exclude_title_keywords | join('\n') }}</textarea>
+        </div>
+
+        <div class="form-row">
+            <label>Fuzzy Match Threshold (%):</label>
+            <input type="number" name="fuzzy_threshold" value="{{ config.fuzzy_threshold }}" min="50" max="100" />
+        </div>
+    </div>
+
+    <div class="info-box">
+        <h3>Active Scraper Sources</h3>
+        
+        <div style="margin-bottom: 12px;">
+            <label>
+                <input type="checkbox" name="enable_jobspy" {% if config.enable_jobspy %}checked{% endif %}>
+                <strong>Enable JobSpy</strong> (LinkedIn, Indeed, Glassdoor, Naukri)
+            </label>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label>
+                <input type="checkbox" name="enable_reddit" {% if config.enable_reddit %}checked{% endif %}>
+                <strong>Enable Reddit Scraper</strong> (Public .json endpoints, no API key)
+            </label>
+            <div style="margin-top: 6px; margin-left: 24px;">
+                <label>Subreddits to scan:</label><br>
+                <input type="text" name="subreddits" value="{{ config.subreddits | join(', ') }}" style="width: 80%;" />
+            </div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label>
+                <input type="checkbox" name="enable_ats" {% if config.enable_ats %}checked{% endif %}>
+                <strong>Enable ATS Poller</strong> (Greenhouse & Lever public boards)
+            </label>
+            <div style="margin-top: 6px; margin-left: 24px;">
+                <label>Greenhouse Slugs (comma-separated):</label><br>
+                <input type="text" name="greenhouse_slugs" value="{{ config.ats_slugs.get('greenhouse', []) | join(', ') }}" style="width: 80%;" /><br><br>
+                <label>Lever Slugs (comma-separated):</label><br>
+                <input type="text" name="lever_slugs" value="{{ config.ats_slugs.get('lever', []) | join(', ') }}" style="width: 80%;" />
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn" style="padding: 10px 24px;">Save All Settings</button>
+</form>
+{% endblock %}

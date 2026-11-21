@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="section-title">Resume Management</div>
+
+<div class="info-box">
+    <h3>Resume Mode Toggle</h3>
+    <p class="text-muted" style="margin-bottom: 12px;">Choose how Jobee pairs your resume with job postings.</p>
+    
+    <div style="display: flex; gap: 20px; align-items: center;">
+        <label>
+            <input type="radio" name="resume_mode" value="single_base" checked disabled>
+            <strong>Single Base Resume</strong> (Active in V1)
+        </label>
+        <label class="v2-locked">
+            <input type="radio" name="resume_mode" value="ats_tailored" disabled>
+            <strong>ATS-Tailored Resume</strong>
+            <span class="v2-badge">Coming in V2</span>
+        </label>
+    </div>
+    <p class="text-muted" style="margin-top: 8px;">
+        <em>V2 will feature keyword swap & local Ollama/BYOK LLM rewrite to compile tailored ATS PDFs via RenderCV & Resume-Matcher.</em>
+    </p>
+</div>
+
+<div class="info-box">
+    <h3>Master Base Resume (PDF)</h3>
+    <p class="text-muted" style="margin-bottom: 12px;">Drop your ATS-friendly resume here. It will be stored at <code>resumes/base_resume.pdf</code>.</p>
+    
+    <div style="margin-bottom: 16px;">
+        <strong>Current File Status:</strong>
+        {% if resume_exists %}
+            <span>Available on disk (<code>resumes/base_resume.pdf</code>)</span>
+            {% if resume_drive_url %}
+                <br><strong>Google Drive Link:</strong> <a href="{{ resume_drive_url }}" target="_blank">{{ resume_drive_url }}</a>
+            {% endif %}
+        {% else %}
+            <span style="color: #555;">No base resume uploaded yet.</span>
+        {% endif %}
+    </div>
+
+    <form method="POST" action="/api/resume/upload" enctype="multipart/form-data">
+        <div class="form-row">
+            <input type="file" name="file" accept=".pdf" required />
+            <button type="submit" class="btn">Upload / Replace Resume</button>
+        </div>
+    </form>
+</div>
+
+<div class="section-title">Integrations & Sync</div>
+
+<div class="info-box">
+    <h3>Google Cloud Integration</h3>
+    <div style="margin-bottom: 12px;">
+        <strong>Connection Status:</strong>
+        {% if google_auth %}
+            <span style="font-weight: bold; border: 1px solid #000; padding: 2px 6px;">CONNECTED</span>
+        {% else %}
+            <span style="border: 1px solid #000; padding: 2px 6px;">LOCAL-ONLY MODE</span>
+            <span class="text-muted" style="margin-left: 8px;">(App runs 100% locally with SQLite & CSV export. Google integration is optional.)</span>
+        {% endif %}
+    </div>
+
+    <form method="POST" action="/api/settings/google">
+        <div class="form-row">
+            <label>Google Sheet ID:</label>
+            <input type="text" name="google_sheet_id" value="{{ config.google_sheet_id or '' }}" placeholder="Spreadsheet ID from docs.google.com/spreadsheets/d/..." />
+        </div>
+        <div class="form-row">
+            <label>Drive Folder ID (Optional):</label>
+            <input type="text" name="google_drive_folder_id" value="{{ config.google_drive_folder_id or '' }}" placeholder="Drive Folder ID for resume storage" />
+        </div>
+        <button type="submit" class="btn btn-outline">Save Google Settings</button>
+        {% if config.google_sheet_id %}
+            <a href="https://docs.google.com/spreadsheets/d/{{ config.google_sheet_id }}" target="_blank" class="btn" style="margin-left: 10px;">Open Google Sheet &nearr;</a>
+        {% endif %}
+    </form>
+
+    <div style="margin-top: 16px; font-size: 12px; border-top: 1px dashed #000; padding-top: 8px;">
+        To connect Google Drive & Sheets, see <a href="/static/SETUP_GOOGLE.md" target="_blank">SETUP_GOOGLE.md</a> in the project root.
+    </div>
+</div>
+{% endblock %}
