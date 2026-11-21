@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="control-bar">
+    <button class="btn" id="btn-scan" onclick="triggerFastScan()">Run Fast Scan Now (<20s)</button>
+    
+    <label for="sched-select">Auto-Scan:</label>
+    <select id="sched-select" onchange="updateSchedule(this.value)">
+        <option value="0" {% if config.schedule_hours == 0 %}selected{% endif %}>Off</option>
+        <option value="4" {% if config.schedule_hours == 4 %}selected{% endif %}>Every 4h</option>
+        <option value="6" {% if config.schedule_hours == 6 %}selected{% endif %}>Every 6h</option>
+        <option value="12" {% if config.schedule_hours == 12 %}selected{% endif %}>Every 12h</option>
+    </select>
+
+    <button class="btn btn-outline" id="btn-sync" onclick="triggerSync()">Sync to Google Sheets</button>
+    <a href="/api/export/csv" class="btn btn-outline">Export CSV</a>
+
+    <span id="scan-status" style="font-size: 13px; margin-left: 10px; font-weight: bold;"></span>
+</div>
+
+<!-- Instant Targeted Job Scan Box -->
+<div class="info-box" style="margin-bottom: 20px; background: #fafafa;">
+    <h3>Instant Targeted Job Scan (Live Online)</h3>
+    <p class="text-muted" style="margin-bottom: 10px;">
+        Choose either a Role, Location (defaults to Hyderabad), or both to scan live web boards in real-time.
+    </p>
+    <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+        <div>
+            <label>Target Role:</label><br>
+            <input type="text" id="custom-role" placeholder="e.g. AI Engineer, React, Product Manager" style="width: 280px; height: 34px;" />
+        </div>
+        <div>
+            <label>Target Location (Default: Hyderabad):</label><br>
+            <input type="text" id="custom-location" value="Hyderabad" placeholder="City or Remote" style="width: 220px; height: 34px;" />
+        </div>
+        <div>
+            <button class="btn" id="btn-custom-scan" onclick="triggerCustomScan()" style="height: 34px;">
+                Scan Live Now
+            </button>
+        </div>
+        <span id="custom-scan-status" style="font-size: 13px; font-weight: bold; margin-left: 8px;"></span>
+    </div>
+</div>
+
+<div class="stats-row">
+    <div class="stat-box">
+        <span class="stat-num">{{ stats.total }}</span>
+        <span class="stat-label">Total Jobs (<24h)</span>
+    </div>
+    <div class="stat-box">
+        <span class="stat-num">{{ stats.to_apply }}</span>
+        <span class="stat-label">To Apply</span>
+    </div>
+    <div class="stat-box">
+        <span class="stat-num">{{ stats.applied }}</span>
+        <span class="stat-label">Applied</span>
+    </div>
+    <div class="stat-box">
+        <span class="stat-num">{{ stats.synced }}</span>
+        <span class="stat-label">Synced to Sheets</span>
+    </div>
+</div>
+
+<!-- Unified Flexible Filter Bar: Role, Location, Source, Status, Keywords -->
+<form method="GET" action="/" class="filter-bar">
+    <div>
+        <label>Role</label><br>
+        <input type="text" name="role" value="{{ request_params.role or '' }}" placeholder="Filter by role..." style="width: 170px;" />
+    </div>
+
+    <div>
+        <label>Location</label><br>
+        <input type="text" name="location" value="{{ request_params.location or '' }}" placeholder="Hyderabad, Remote..." style="width: 170px;" />
+    </div>
+
+    <div>
+        <label>Source</label><br>
+        <select name="source" onchange="this.form.submit()">
+            <option value="">All Sources</option>
+            <option value="linkedin" {% if request_params.source == 'linkedin' %}selected{% endif %}>LinkedIn</option>
+            <option value="indeed" {% if request_params.source == 'indeed' %}selected{% endif %}>Indeed</option>
+            <option value="glassdoor" {% if request_params.source == 'glassdoor' %}selected{% endif %}>Glassdoor</option>
+            <option value="greenhouse" {% if request_params.source == 'greenhouse' %}selected{% endif %}>Greenhouse</option>
+            <option value="lever" {% if request_params.source == 'lever' %}selected{% endif %}>Lever</option>
+            <option value="reddit" {% if request_params.source == 'reddit' %}selected{% endif %}>Reddit</option>
+        </select>
+    </div>
+
+    <div>
+        <label>Status</label><br>
+        <select name="status" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="To Apply" {% if request_params.status == 'To Apply' %}selected{% endif %}>To Apply</option>
+            <option value="Applied" {% if request_params.status == 'Applied' %}selected{% endif %}>Applied</option>
+            <option value="Interview" {% if request_params.status == 'Interview' %}selected{% endif %}>Interview</option>
+            <option value="Rejected" {% if request_params.status == 'Rejected' %}selected{% endif %}>Rejected</option>
+            <option value="Skipped" {% if request_params.status == 'Skipped' %}selected{% endif %}>Skipped</option>
+        </select>
+    </div>
+
+    <div>
+        <label>Freeform Keywords</label><br>
+        <input type="text" name="q" value="{{ request_params.q or '' }}" placeholder="Search all fields..." style="width: 180px;" />
+    </div>
+
+    <div>
+        <button type="submit" class="btn btn-outline" style="height: 32px;">Filter</button>
+        <a href="/" class="btn btn-outline" style="height: 32px; text-decoration: none;">Reset</a>
+    </div>
+</form>
+
+{% if jobs %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Hours Old</th>
+                <th>Company</th>
+                <th>Role Title</th>
+                <th>Location</th>
+                <th>Source</th>
+                <th>Apply Type</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td class="nowrap">{{ job.hours_old }}h</td>
+                <td style="font-weight: bold;">{{ job.company }}</td>
+                <td>{{ job.title }}</td>
+                <td>{{ job.location or 'N/A' }}</td>
+                <td><span class="source-tag">{{ job.source }}</span></td>
+                <td>{{ job.apply_type }}</td>
+                <td>
+                    <select class="status-select" onchange="updateJobStatus('{{ job.job_hash }}', this.value)">
+                        <option value="To Apply" {% if job.status == 'To Apply' %}selected{% endif %}>To Apply</option>
+                        <option value="Applied" {% if job.status == 'Applied' %}selected{% endif %}>Applied</option>
+                        <option value="Interview" {% if job.status == 'Interview' %}selected{% endif %}>Interview</option>
+                        <option value="Rejected" {% if job.status == 'Rejected' %}selected{% endif %}>Rejected</option>
+                        <option value="Skipped" {% if job.status == 'Skipped' %}selected{% endif %}>Skipped</option>
+                    </select>
+                </td>
+                <td class="nowrap">
+                    {% if job.apply_url %}
+                    <a href="{{ job.apply_url }}" target="_blank" class="btn btn-sm">Apply &nearr;</a>
+                    {% endif %}
+                    <button class="btn btn-sm btn-outline" onclick="openJdModal('{{ job.job_hash }}', '{{ job.title | escape }} ({{ job.company | escape }})', '{{ job.apply_url or '' }}', `{{ job.jd_text | escape }}`)">JD</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <p><strong>No jobs match your current search.</strong></p>
+    <p style="margin-top: 8px;">Try running an <strong>Instant Targeted Job Scan</strong> above or resetting your filters.</p>
+</div>
+{% endif %}
+
+<!-- Enhanced JD Modal with Live Web Scraper -->
+<div id="jd-modal" class="modal-overlay">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeJdModal()">&times;</button>
+        <h3 id="modal-title" style="margin-bottom: 8px;">Job Description</h3>
+        
+        <div style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+            <div>
+                <span id="jd-origin-tag" style="border: 1px solid #000; padding: 2px 6px; font-size: 11px; font-weight: bold;">LOCAL CACHE</span>
+                <span id="jd-live-status" style="font-size: 12px; margin-left: 8px;"></span>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline" id="btn-fetch-live-jd" onclick="fetchLiveJd()">
+                    Fetch Full JD from Web &nearr;
+                </button>
+            </div>
+        </div>
+
+        <div id="modal-content" class="modal-body"></div>
+    </div>
+</div>
+
+<script>
+let currentJobHash = null;
+let currentApplyUrl = null;
+
+function openJdModal(hash, title, applyUrl, jdText) {
+    currentJobHash = hash;
+    currentApplyUrl = applyUrl;
+    document.getElementById('modal-title').innerText = title;
+    document.getElementById('jd-origin-tag').innerText = "LOCAL CACHE";
+    document.getElementById('jd-live-status').innerText = "";
+    
+    const contentEl = document.getElementById('modal-content');
+    if (jdText && jdText.trim().length > 30) {
+        contentEl.innerText = jdText;
+    } else {
+        contentEl.innerText = "No detailed description stored locally yet. Click 'Fetch Full JD from Web' above to scrape it live.";
+    }
+
+    const fetchBtn = document.getElementById('btn-fetch-live-jd');
+    if (applyUrl && applyUrl.startsWith('http')) {
+        fetchBtn.style.display = 'inline-block';
+        fetchBtn.disabled = false;
+    } else {
+        fetchBtn.style.display = 'none';
+    }
+
+    document.getElementById('jd-modal').classList.add('open');
+}
+
+function closeJdModal() {
+    document.getElementById('jd-modal').classList.remove('open');
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById('jd-modal');
+    if (event.target === modal) {
+        closeJdModal();
+    }
+}
+
+async function fetchLiveJd() {
+    if (!currentJobHash) return;
+    const btn = document.getElementById('btn-fetch-live-jd');
+    const status = document.getElementById('jd-live-status');
+    const content = document.getElementById('modal-content');
+    const tag = document.getElementById('jd-origin-tag');
+
+    btn.disabled = true;
+    status.innerHTML = '<span class="spinner"></span> Scraping live webpage...';
+
+    try {
+        const res = await fetch(`/api/jobs/${currentJobHash}/fetch-jd`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.jd_text) {
+            content.innerText = data.jd_text;
+            tag.innerText = "LIVE SCRAPED & SAVED";
+            status.innerText = "Updated in SQLite!";
+        } else {
+            status.innerText = data.error || "Could not extract full JD from live page.";
+        }
+    } catch (e) {
+        status.innerText = "Error contacting server.";
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function triggerFastScan() {
+    const btn = document.getElementById('btn-scan');
+    const status = document.getElementById('scan-status');
+    btn.disabled = true;
+    status.innerHTML = '<span class="spinner"></span> Running parallel scan (<20s)...';
+    try {
+        const res = await fetch('/api/scan', { method: 'POST' });
+        const data = await res.json();
+        status.innerText = 'Scan finished! Reloading...';
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (e) {
+        status.innerText = 'Error running scan.';
+        btn.disabled = false;
+    }
+}
+
+async function triggerCustomScan() {
+    const roleInput = document.getElementById('custom-role');
+    const locInput = document.getElementById('custom-location');
+    const btn = document.getElementById('btn-custom-scan');
+    const status = document.getElementById('custom-scan-status');
+
+    const role = roleInput.value.trim();
+    const loc = locInput.value.trim() || 'Hyderabad';
+
+    if (!role && !loc) {
+        alert('Please enter at least a Role or a Location to scan.');
+        return;
+    }
+
+    btn.disabled = true;
+    status.innerHTML = `<span class="spinner"></span> Scanning live web for "${role || 'All Roles'}" (${loc})...`;
+
+    try {
+        const res = await fetch('/api/scan/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: role, location: loc })
+        });
+        const data = await res.json();
+        if (data.success) {
+            status.innerText = `Scan complete! Added ${data.total_new} new jobs. Reloading...`;
+            setTimeout(() => window.location.reload(), 1200);
+        } else {
+            status.innerText = 'Failed to run custom scan.';
+            btn.disabled = false;
+        }
+    } catch (e) {
+        status.innerText = 'Error running custom scan.';
+        btn.disabled = false;
+    }
+}
+
+async function triggerSync() {
+    const btn = document.getElementById('btn-sync');
+    const status = document.getElementById('scan-status');
+    btn.disabled = true;
+    status.innerHTML = '<span class="spinner"></span> Syncing to Google Sheets...';
+    try {
+        const res = await fetch('/api/sync/sheets', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            status.innerText = `Appended ${data.count} jobs to Google Sheets!`;
+        } else {
+            status.innerText = data.error || 'Failed to sync.';
+        }
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+        status.innerText = 'Sync error.';
+        btn.disabled = false;
+    }
+}
+
+async function updateJobStatus(hash, newStatus) {
+    try {
+        await fetch(`/api/jobs/${hash}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+    } catch (e) {
+        alert('Failed to update status.');
+    }
+}
+
+async function updateSchedule(hours) {
+    try {
+        await fetch('/api/settings/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hours: parseInt(hours) })
+        });
+    } catch (e) {
+        alert('Failed to update schedule.');
+    }
+}
+</script>
+{% endblock %}

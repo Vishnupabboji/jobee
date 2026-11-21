@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobee — Local Job Engine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div>
+            <h1>JOBEE</h1>
+            <div class="tagline">Local-First 24H Job Discovery & Tracker</div>
+        </div>
+        <div style="font-size: 12px; font-weight: bold; border: 1px solid #000; padding: 4px 8px;">
+            MODE: <span id="header-mode">{{ config.resume_mode }}</span>
+        </div>
+    </header>
+
+    <nav class="main-nav">
+        <a href="/" class="{% if active_tab == 'jobs' %}active{% endif %}">Jobs Feed</a>
+        <a href="/reddit" class="{% if active_tab == 'reddit' %}active{% endif %}">Reddit Jobs</a>
+        <a href="/resume" class="{% if active_tab == 'resume' %}active{% endif %}">Resume & Integrations</a>
+        <a href="/filters" class="{% if active_tab == 'filters' %}active{% endif %}">Filters & Sources</a>
+        <a href="/logs" class="{% if active_tab == 'logs' %}active{% endif %}">Run Logs</a>
+    </nav>
+
+    <main class="page-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- JD Modal -->
+    <div id="jd-modal" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <h3 id="modal-title">Job Description</h3>
+            <div id="modal-content" class="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        function openModal(title, text) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerText = text || "No job description text available.";
+            document.getElementById('jd-modal').classList.add('open');
+        }
+        function closeModal() {
+            document.getElementById('jd-modal').classList.remove('open');
+        }
+        window.onclick = function(event) {
+            const modal = document.getElementById('jd-modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
